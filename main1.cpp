@@ -1,3 +1,13 @@
+/* DUAL OPTIMIZATION PROBLEM (Lagrangian)
+ * solved using QP
+ *
+ * the problem is
+ *   Minimize  (1/2) \sum_{n=1}^{N}( y_n y_m alpha_n alpha_m <x_n,x_m> ) - \sum_{n=1}^{N} alpha_n
+ *   subj. to      <y,alpha> = 0
+               0 <= alpha_n <= inf  ; for n = 1 ... N
+ */
+
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -5,7 +15,6 @@
 #include <tuple>
 #include <vector>
 #include <numeric>
-#include <functional>
 
 #include <CGAL/basic.h>
 #include <CGAL/QP_models.h>
@@ -38,66 +47,6 @@ tuple<vector<vector<CGAL::Gmpzf>>,vector<CGAL::Gmpzf>> parse_data(istream &in) {
     }
 
     return {xs,ys};
-}
-
-template <typename NT,
-          typename ET,
-          typename InstanceIterator,
-          typename LabelIterator,
-          typename Kernel>
-void learn(InstanceIterator instance_begin,
-           InstanceIterator instance_end,
-           LabelIterator label_begin,
-           Kernel K=std::bind(std::inner_product(std::placeholders::_1, std::placeholders::_2, NT(0)))) {
-    InstanceIterator instance_it1;
-    InstanceIterator instance_it2;
-    LabelIterator    label_it1;
-    LabelIterator    label_it2;
-
-    auto N = std::distance(instance_begin, instance_end);
-
-    // define program and solution types
-    using Program  = CGAL::Quadratic_program<NT>;
-    using Solution = CGAL::Quadratic_program_solution<ET>;
-
-    /* Quadratic program
-     *   Minimize: alpha' . D . alpha + c' . alpha
-     *   subj. to:     <y,alpha> = 0
-     *             0 <= alpha_n <= inf ; for n=1...N
-     */
-    
-    // Nonnegative Quadratic program with constraint Ax == b
-    Program qp(CGAL::EQUAL, true, 0, false, 0);
-
-    // set A
-    label_it1 = label_begin;
-    for(int n=0; n<N; ++n) {
-        qp.set_a(n,0,*label_it1);
-        ++label_it1;
-    }
-    // set b
-    qp.set_b(0.0,0.0);
-    
-    // set D
-    instance_it1 = instance_begin;
-    label_it1 = label_begin;
-    for(int n=0; n<N; ++n) {
-        instance_it2 = instance_begin;
-        label_it2 = label_begin;
-        for(int m=0; m<=n; ++m) {
-            auto val = (*label_it1) * (*label_it2) * K(*instance_it1, *instance_it2);
-            qp.set_d(n, m, val);
-            ++instance_it2;
-        }
-        ++instance_it1;
-    }
-
-    //set c
-    for(int n=0; n<N; ++n) {
-        qp.set_c(n, -2.0);
-    }
-
-	Solution s = CGAL::solve_nonnegative_quadratic_program(qp, ET());
 }
 
 int main(int argc, char *argv[]) {
