@@ -122,7 +122,7 @@ auto learn(NT C,
         qp.set_c(n, -2.0);
     }
 
-	Solution s = CGAL::solve_quadratic_program(qp, ET());
+    Solution s = CGAL::solve_quadratic_program(qp, ET());
 
     std::vector<CGAL::Quotient<ET>>                                          alpha;
     std::vector<typename std::iterator_traits<InstanceIterator>::value_type> support_vectors;
@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
     d = x.front().size();
     N = y.size();
 
-	auto model = learn<NT,ET,InnerProduct>(1000, begin(x), end(x), begin(y));
+    auto model = learn<NT,ET,InnerProduct>(1000, begin(x), end(x), begin(y));
 
     int count = 0;
     for(int n=0; n<N; ++n) {
