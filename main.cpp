@@ -13,15 +13,60 @@
 
 #include <CGAL/Gmpzf.h>
 
+
+template <typename Kernel,
+          typename ET,
+          typename Instance,
+          typename Label>
+struct svm_model {
+    Kernel                          kernel;
+    std::vector<CGAL::Quotient<ET>> alpha;
+    CGAL::Quotient<ET>              b;
+
+    std::vector<Instance> support_vectors;
+    std::vector<Label>    support_labels;
+
+    svm_model(Kernel const & kernel,
+              std::vector<CGAL::Quotient<ET>> const & alpha,
+              CGAL::Quotient<ET> const & b,
+              std::vector<Instance> const & support_vectors,
+              std::vector<Label> const & support_labels)
+      : kernel(kernel), alpha(alpha), b(b),
+        support_vectors(support_vectors),
+        support_labels(support_labels) {}
+
+    bool operator()(Instance const & instance) const {
+        CGAL::Quotient<ET> result(0);
+        for(int n=0; n<alpha.size(); ++n) {
+            result += alpha[n] * support_labels[n] * kernel(support_vectors[n],instance);
+        }
+        result += b;
+        return result > 0;
+    }
+};
+template <typename Kernel,
+          typename ET,
+          typename Instance,
+          typename Label>
+svm_model<Kernel,ET,Instance,Label> make_svm_model(
+        Kernel const & kernel,
+        std::vector<CGAL::Quotient<ET>> const & alpha,
+        CGAL::Quotient<ET> const & b,
+        std::vector<Instance> const & support_vectors,
+        std::vector<Label> const & support_labels) {
+    return svm_model<Kernel,ET,Instance,Label>(kernel,alpha,b,support_vectors,support_labels);
+}
+
 template <typename NT,
           typename ET,
+          typename Kernel,
           typename InstanceIterator,
-          typename LabelIterator,
-          typename Kernel>
-auto learn(InstanceIterator instance_begin,
+          typename LabelIterator>
+auto learn(NT C,
+           InstanceIterator instance_begin,
            InstanceIterator instance_end,
            LabelIterator    label_begin,
-           Kernel const &   K) {
+           Kernel const &   kernel=Kernel()) {
 
     InstanceIterator instance_it1;
     InstanceIterator instance_it2;
@@ -37,11 +82,13 @@ auto learn(InstanceIterator instance_begin,
     /* Quadratic program
      *   Minimize: alpha' . D . alpha + c' . alpha
      *   subj. to:     <y,alpha> = 0
-     *             0 <= alpha_n <= inf ; for n=1...N
+     *             0 <= alpha_n <= C ; for n=1...N
      */
     
-    // Nonnegative Quadratic program with constraint Ax == b
-    Program qp(CGAL::EQUAL, true, 0, false, 0);
+    /* Nonnegative Quadratic program with constraint Ax == b
+     * lower bound 0, upper bound C
+     */
+    Program qp(CGAL::EQUAL, true, NT(0), true, C);
 
     // set A
     label_it1 = label_begin;
@@ -50,7 +97,8 @@ auto learn(InstanceIterator instance_begin,
         ++label_it1;
     }
     // set b
-    qp.set_b(0.0,0.0);
+    qp.set_b(0,NT(0));
+
     
     // set D
     instance_it1 = instance_begin;
@@ -59,7 +107,7 @@ auto learn(InstanceIterator instance_begin,
         instance_it2 = instance_begin;
         label_it2 = label_begin;
         for(int m=0; m<=n; ++m) {
-            auto val = (*label_it1) * (*label_it2) * K(*instance_it1, *instance_it2);
+            auto val = (*label_it1) * (*label_it2) * kernel(*instance_it1, *instance_it2);
             qp.set_d(n, m, val);
             ++instance_it2;
             ++label_it2;
@@ -68,12 +116,13 @@ auto learn(InstanceIterator instance_begin,
         ++label_it1;
     }
 
-    //set c
+
+    // set c
     for(int n=0; n<N; ++n) {
         qp.set_c(n, -2.0);
     }
 
-	Solution s = CGAL::solve_nonnegative_quadratic_program(qp, ET());
+	Solution s = CGAL::solve_quadratic_program(qp, ET());
 
     std::vector<CGAL::Quotient<ET>>                                          alpha;
     std::vector<typename std::iterator_traits<InstanceIterator>::value_type> support_vectors;
@@ -93,18 +142,49 @@ auto learn(InstanceIterator instance_begin,
 
     CGAL::Quotient<ET> b = support_labels.front();
     for(int n=0; n<alpha.size(); ++n) {
-        b -= alpha[n] * support_labels[n] * K(support_vectors[n],support_vectors.front());
+        b -= alpha[n] * support_labels[n] * kernel(support_vectors[n],support_vectors.front());
     }
 
-    return [alpha,support_vectors,support_labels,b,K](auto instance) {
-        CGAL::Quotient<ET> result;
-        for(int n=0; n<alpha.size(); ++n) {
-            result += alpha[n] * support_labels[n] * K(support_vectors[n],instance);
-        }
-        result += b;
-        return (result > 0 ? 1 : -1);
-    };
+    return make_svm_model(kernel,alpha,b,support_vectors,support_labels);
 }
+
+/* TODO
+template <typename NT,
+          typename ET,
+          typename KernelIterator,
+          typename InstanceIterator,
+          typename LabelIterator>
+auto multi_learn(NT C,
+                 InstanceIterator instance_begin,
+                 InstanceIterator instance_end,
+                 LabelIterator    label_begin,
+                 KernelIterator   kernel_begin,
+                 KernelIterator   kernel_end) {
+
+    struct CombinedKernel {
+        KernelIterator kernel_begin;
+        KernelIterator kernel_end;
+        vector<NT> beta;
+
+        CombinedKernel(KernelIterator kernel_begin,
+                       KernelIterator kernel_end)
+          : kernel_begin(kernel_begin),
+            kernel_end(kernel_end),
+            beta(std::distance(kernel_begin,kernel_end), NT(1.0/std::distance(kernel_begin,kernel_end))) {}
+    };
+
+    auto N = std::distance(instance_begin, instance_end);
+    auto K = std::distance(kernel_begin, kernel_end);
+
+    CombinedKernel kernel(kernel_begin, kernel_end);
+
+    NT S           = 1;
+    NT Theta       = 0;  // -inf
+    while(true) {
+        
+    }
+}
+*/
 
 
 using namespace std;
@@ -115,7 +195,7 @@ tuple<vector<vector<CGAL::Gmpzf>>,vector<CGAL::Gmpzf>> parse_data(istream &in) {
 
     string line;
     while(getline(in,line)) {
-        xs.push_back({});
+        xs.emplace_back();
         auto & x = xs.back();
 
         istringstream iss{line};
@@ -133,6 +213,40 @@ tuple<vector<vector<CGAL::Gmpzf>>,vector<CGAL::Gmpzf>> parse_data(istream &in) {
     return {xs,ys};
 }
 
+double K1(vector<double> const & a, vector<double> const & b) {
+    return std::inner_product(begin(a), end(a), begin(b), 0.0);
+}
+
+struct InnerProduct {
+    template<typename NT>
+    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
+        return std::inner_product(begin(a), end(a), begin(b), NT(0));
+    }
+};
+
+struct PolynomialKernel5 {
+    template<typename NT>
+    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
+        auto val = std::inner_product(begin(a), end(a), begin(b), NT(0)) + 500;
+        return val*val*val*val*val;
+    }
+};
+
+struct RBFKernel {
+    template<typename NT>
+    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
+        auto val = std::inner_product(begin(a), end(a), begin(b), NT(0),
+            [](NT const & a, NT const & b) {
+                return a+b;
+            },
+            [](NT const & a, NT const & b) {
+                return (a-b)*(a-b);
+            });
+        val *= -5;
+        return NT(exp(to_double(val)));
+    }
+};
+
 int main(int argc, char *argv[]) {
     using NT = CGAL::Gmpzf;
     using ET = CGAL::Gmpzf;
@@ -141,26 +255,20 @@ int main(int argc, char *argv[]) {
 
     ifstream in{filename};
 
-    int                         d;
-    int                         N;
-    vector<vector<CGAL::Gmpzf>> x;
-    vector<CGAL::Gmpzf>         y;
+    int                d;
+    int                N;
+    vector<vector<NT>> x;
+    vector<NT>         y;
 
     tie(x,y) = parse_data(in);
     d = x.front().size();
     N = y.size();
 
-    struct K {
-        NT operator()(vector<NT> const & a, vector<NT> const & b) const {
-            return std::inner_product(begin(a), end(a), begin(b), NT(0));
-        }
-    };
-
-	auto model = learn<NT,ET>(begin(x), end(x), begin(y), K());
+	auto model = learn<NT,ET,InnerProduct>(1000, begin(x), end(x), begin(y));
 
     int count = 0;
     for(int n=0; n<N; ++n) {
-        auto predicted = model(x[n]);
+        auto predicted = (model(x[n]) ? 1 : -1);
         if(predicted == y[n]) {
             ++count;
         }
