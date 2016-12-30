@@ -112,7 +112,7 @@ auto learn(NT C,
         instance_it2 = instance_begin;
         label_it2 = label_begin;
         for(int m=0; m<=n; ++m) {
-            auto val = (*label_it1) * (*label_it2) * kernel(*instance_it1, *instance_it2);
+            auto val = (*label_it1) * (*label_it2) * kernel(*instance_it1, *instance_it2);  // specify 2d !!, so there is no NT(0.5) factor
             qp.set_d(n, m, val);
             ++instance_it2;
             ++label_it2;
@@ -123,7 +123,7 @@ auto learn(NT C,
 
     // set c
     for(int n=0; n<N; ++n) {
-        qp.set_c(n, -2.0);
+        qp.set_c(n, NT(-1.0));
     }
 
     Solution s = CGAL::solve_quadratic_program(qp, ET());
@@ -131,11 +131,12 @@ auto learn(NT C,
     std::vector<CGAL::Quotient<ET>>                                          alpha;
     std::vector<typename std::iterator_traits<InstanceIterator>::value_type> support_vectors;
     std::vector<typename std::iterator_traits<LabelIterator>::value_type>    support_labels;
+
     instance_it1 = instance_begin;
     label_it1    = label_begin;
     for(auto it=s.variable_values_begin(); it!=s.variable_values_end(); ++it) {
         auto alpha_n = *it;
-        if(alpha_n > 0) {
+        if(alpha_n > NT(0)) {
             alpha.push_back(alpha_n);
             support_vectors.push_back(*instance_it1);
             support_labels.push_back(*label_it1);
@@ -155,34 +156,36 @@ auto learn(NT C,
 template<typename NT,
          typename ET>
 std::tuple<std::vector<NT>,NT> optimize(std::vector<std::vector<NT>> const & constraints) {
-    auto K = constraints.size();
+    auto K = constraints.front().size();
 
     using Program  = CGAL::Quadratic_program<NT>;
     using Solution = CGAL::Quadratic_program_solution<ET>;
 
-    Program lp(CGAL::LARGER, false, 0, false, 0);
+    Program lp(CGAL::LARGER, true, 0, false, 0);
+
+    // theta unconstrained
+    lp.set_l(K,false,0);
 
     // set A
     int A_row = 0;
-    for( ; A_row<K; ++A_row) {
-        lp.set_a(A_row,A_row,NT(1));
-    }
     for(int k=0; k<K; ++k) {
-        lp.set_a(k,A_row,1);
+        lp.set_a(k,A_row,NT(1));
     }
     lp.set_r(A_row,CGAL::EQUAL);
-    lp.set_b(A_row,1);
+    lp.set_b(A_row,NT(1));
     ++A_row;
     for(auto & constraint : constraints) {
-        int idx = 0;
-        for(auto & x : constraint) {
-            lp.set_a(idx++,A_row,x);
+        int k = 0;
+        for(auto & S_k : constraint) {
+            lp.set_a(k,A_row,S_k);
+            ++k;
         }
-        lp.set_a(idx,A_row,-1);
+        lp.set_a(k,A_row,NT(-1));
+        ++A_row;
     }
 
     // set c
-    lp.set_c(K,-1);
+    lp.set_c(K,NT(-1));
 
     Solution s = CGAL::solve_linear_program(lp, ET());
 
@@ -226,8 +229,9 @@ auto multi_learn(NT C,
         NT operator()(instance_type const & a, instance_type const & b) const {
             NT result(0);
             auto b_it = begin(beta);
-            for(auto it=kernel_begin; it!=kernel_end; ++it) {
-                result += (*b_it) * (*it)(a,b);
+            for(auto k_it=kernel_begin; k_it!=kernel_end; ++k_it) {
+                result += (*b_it) * (*k_it)(a,b);
+                ++b_it;
             }
             return result;
         }
@@ -240,45 +244,70 @@ auto multi_learn(NT C,
 
     auto model = learn<NT,ET>(C, instance_begin, instance_end, label_begin, kernel);
 
-    CGAL::Quotient<ET> S(model.objective_value);
-    NT theta;
+    CGAL::Quotient<ET>     S(model.objective_value);
+    NT                 theta;
 
     std::vector<std::vector<NT>> constraints;
-    constraints.emplace_back(K+1,NT(1));
-    constraints[0][K] = 0;
 
-
-    auto eps = 10;
+    CGAL::Quotient<ET> eps;
     do {
-        std::cout << "aaaaaa" << std::endl;
         constraints.emplace_back();
         auto & last_constraint = constraints.back();
         for(int k=0; k<K; ++k) {
+        /*
             CGAL::Quotient<ET> S_k(0);
+            for(int n=0; n<model.alpha.size(); ++n) {
+                for(int m=0; m<model.alpha.size(); ++m) {
+                    S_k += NT(0.5) * model.alpha[n] * model.alpha[m] * model.support_labels[n] * model.support_labels[m] * kernel.kernel_begin[k](model.support_vectors[n], model.support_vectors[m]);
+                }
+                S_k -= model.alpha[n];
+            }
+        */
+        /*
+            CGAL::Quotient<ET>     S_k(0);
             for(int n=0; n<model.alpha.size(); ++n) {
                 auto alpha_n = model.alpha[n];
                 auto label_n = model.support_labels[n];
                 auto instance_n = model.support_vectors[n];
                 for(int m=0; m<model.alpha.size(); ++m) {
-                    S_k += alpha_n*model.alpha[m]+label_n*model.support_labels[m]*kernel.kernel_begin[k](instance_n,model.support_vectors[m]);
+                    S_k += NT(0.5) * alpha_n * model.alpha[m] * label_n * model.support_labels[m] * kernel.kernel_begin[k](instance_n,model.support_vectors[m]);
                 }
+                S_k -= alpha_n;
             }
-            last_constraint.push_back(CGAL::to_double(S_k));
+        */
+        /*
+            CGAL::Quotient<ET> S_k(0);
+            for(int n=0; n<model.alpha.size(); ++n) {
+                for(int m=0; m<n; ++m) {
+                    S_k += model.alpha[n] * model.alpha[m] * model.support_labels[n] * model.support_labels[m] * kernel.kernel_begin[k](model.support_vectors[n], model.support_vectors[m]);
+                }
+                S_k += NT(0.5) * model.alpha[n] * model.alpha[n] * model.support_labels[n] * model.support_labels[n] * kernel.kernel_begin[k](model.support_vectors[n], model.support_vectors[n]);
+                S_k -= model.alpha[n];
+            }
+        */
+            CGAL::Quotient<ET>     S_k(0);
+            for(int n=0; n<model.alpha.size(); ++n) {
+                auto & alpha_n = model.alpha[n];
+                auto & label_n = model.support_labels[n];
+                auto & instance_n = model.support_vectors[n];
+                for(int m=0; m<n; ++m) {
+                    S_k += alpha_n * model.alpha[m] * label_n * model.support_labels[m] * kernel.kernel_begin[k](instance_n,model.support_vectors[m]);
+                }
+                S_k += NT(0.5) * alpha_n * alpha_n * label_n * label_n * kernel.kernel_begin[k](instance_n,instance_n);
+                S_k -= alpha_n;
+            }
+            last_constraint.emplace_back(CGAL::to_double(S_k));
         }
-        last_constraint.emplace_back(-1);
 
-        std::cout << "bbbbbbb" << std::endl;
         std::tie(kernel.beta,theta) = optimize<NT,ET>(constraints);
-        std::cout << "ccccccc" << std::endl;
 
         model = learn<NT,ET>(C, instance_begin, instance_end, label_begin, kernel);
-        std::cout << "ddddddd" << std::endl;
         S = model.objective_value;
 
-        std::cout << theta << std::endl;
-        std::cout << 1.0 - S/theta << std::endl;
-        std::cout << "eeeeeee" << std::endl;
-    } while(1.0 - S/theta > eps);
+        eps = NT(1) - (S/theta);
+        if(eps < 0) eps = -eps;
+        std::cout << CGAL::to_double(eps) << std::endl;
+    } while(eps > 0.1);
     
     return model;
 }
@@ -332,14 +361,15 @@ struct PolynomialKernel5 {
 struct RBFKernel {
     template<typename NT>
     NT operator()(vector<NT> const & a, vector<NT> const & b) const {
-        auto val = std::inner_product(begin(a), end(a), begin(b), NT(0),
-            [](NT const & a, NT const & b) {
-                return a+b;
-            },
-            [](NT const & a, NT const & b) {
-                return (a-b)*(a-b);
-            });
+        int d = a.size();
+
+        NT val = 0;
+        for(int i=0; i<d; ++i) {
+            auto temp = a[i]-b[i];
+            val += temp*temp;
+        }
         val *= -5;
+
         return NT(exp(to_double(val)));
     }
 };
@@ -361,9 +391,14 @@ int main(int argc, char *argv[]) {
     d = x.front().size();
     N = y.size();
 
-    vector<InnerProduct> kernels{InnerProduct()};
+    using kernel_type = function<NT(vector<NT> const &, vector<NT> const &)>;
+    vector<kernel_type> kernels{PolynomialKernel5(), InnerProduct()};
 
     auto model = multi_learn<NT,ET>(1000, begin(x), end(x), begin(y), begin(kernels),end(kernels));
+    //auto model = learn<NT,ET>(1000, begin(x), end(x), begin(y), *begin(kernels));
+
+    std::cout << "beta: ";
+    for(auto b : model.kernel.beta) {std::cout << CGAL::to_double(b) << " ";} std::cout << std::endl;
 
     int count = 0;
     for(int n=0; n<N; ++n) {
