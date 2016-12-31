@@ -339,40 +339,33 @@ tuple<vector<vector<CGAL::Gmpzf>>,vector<CGAL::Gmpzf>> parse_data(istream &in) {
     return {xs,ys};
 }
 
-double K1(vector<double> const & a, vector<double> const & b) {
-    return std::inner_product(begin(a), end(a), begin(b), 0.0);
+template<typename NT>
+NT InnerProduct(vector<NT> const & a, vector<NT> const & b){
+    return std::inner_product(begin(a), end(a), begin(b), NT(0));
 }
 
-struct InnerProduct {
-    template<typename NT>
-    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
-        return std::inner_product(begin(a), end(a), begin(b), NT(0));
+template<typename NT>
+NT PolynomialKernel5(vector<NT> const & a, vector<NT> const & b){
+    auto val = std::inner_product(begin(a), end(a), begin(b), NT(0)) + 500;
+    auto val5 = val*val;
+    val5 *= val5;
+    val5 *= val;
+    return val5;
+}
+
+template<typename NT>
+NT RBFKernel(vector<NT> const & a, vector<NT> const & b){
+    int d = a.size();
+
+    NT val = 0;
+    for(int i=0; i<d; ++i) {
+        auto temp = a[i]-b[i];
+        val += temp*temp;
     }
-};
+    val *= -5;
 
-struct PolynomialKernel5 {
-    template<typename NT>
-    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
-        auto val = std::inner_product(begin(a), end(a), begin(b), NT(0)) + 500;
-        return val*val*val*val*val;
-    }
-};
-
-struct RBFKernel {
-    template<typename NT>
-    NT operator()(vector<NT> const & a, vector<NT> const & b) const {
-        int d = a.size();
-
-        NT val = 0;
-        for(int i=0; i<d; ++i) {
-            auto temp = a[i]-b[i];
-            val += temp*temp;
-        }
-        val *= -5;
-
-        return NT(exp(to_double(val)));
-    }
-};
+    return NT(exp(to_double(val)));
+}
 
 int main(int argc, char *argv[]) {
     using NT = CGAL::Gmpzf;
@@ -391,8 +384,8 @@ int main(int argc, char *argv[]) {
     d = x.front().size();
     N = y.size();
 
-    using kernel_type = function<NT(vector<NT> const &, vector<NT> const &)>;
-    vector<kernel_type> kernels{PolynomialKernel5(), InnerProduct()};
+    using kernel_type = NT(*)(vector<NT> const &, vector<NT> const &);
+    vector<kernel_type> kernels{PolynomialKernel5<NT>, InnerProduct<NT>, RBFKernel<NT>};
 
     auto model = multi_learn<NT,ET>(1000, begin(x), end(x), begin(y), begin(kernels),end(kernels));
     //auto model = learn<NT,ET>(1000, begin(x), end(x), begin(y), *begin(kernels));
