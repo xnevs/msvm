@@ -147,16 +147,19 @@ auto learn(NT C,
         ++instance_it1;
         ++label_it1;
     }
+    
 
     // solve for b
     int first_margin_sv = 0;
-    while(alpha[first_margin_sv] >= C) {
+    while(first_margin_sv < alpha.size() && alpha[first_margin_sv] >= C) {
         ++first_margin_sv;
     }
+
     NT b(support_labels[first_margin_sv]);
     for(int n=0; n<alpha.size(); ++n) {
         b -= alpha[n] * support_labels[n] * kernel(support_vectors[n], support_vectors[first_margin_sv]);
     }
+    std::cout << "end b" << std::endl;
 
     return make_svm_model<NT>(kernel, alpha, b, support_vectors, support_labels, CGAL::to_double(s.objective_value()));
 }
@@ -250,7 +253,7 @@ auto multi_learn(NT C,
 
     CombinedKernel kernel(kernel_begin, kernel_end);
 
-    std::cout << "bbeta: ";
+    std::cout << "beta: ";
     for(auto b : kernel.beta) {std::cout << CGAL::to_double(b) << " ";} std::cout << std::endl;
 
     auto model = learn<NT, ET>(C, instance_begin, instance_end, label_begin, kernel);
@@ -262,12 +265,9 @@ auto multi_learn(NT C,
 
     NT eps;
     do {
-        std::cout << "do start" << std::endl;
         constraints.emplace_back();
         auto & last_constraint = constraints.back();
         for(int k=0; k<K; ++k) {
-            std::cout << "k: " << k << std::endl;
-            std::cout << "model.alpha.size()" << model.alpha.size() << std::endl;
             NT S_k(0);
             for(int n=0; n<model.alpha.size(); ++n) {
                 auto & alpha_n = model.alpha[n];
@@ -281,7 +281,6 @@ auto multi_learn(NT C,
             }
             last_constraint.emplace_back(CGAL::to_double(S_k));
         }
-        std::cout << "last_constraint finished" << std::endl;
 
         std::tie(kernel.beta, theta) = optimize<NT, ET>(constraints);
 
@@ -295,7 +294,7 @@ auto multi_learn(NT C,
             S = -S;
             theta = -theta;
         }
-        eps = NT(0.9) * theta - S; // convergence criterion  ===  < 0.1
+        eps = NT(0.9) * theta - S; // convergence criterion  <  0.1
 
     } while(eps > 0);
     
@@ -337,7 +336,7 @@ NT InnerProduct(vector<NT> const & a, vector<NT> const & b){
 
 template<typename NT>
 NT PolynomialKernel5(vector<NT> const & a, vector<NT> const & b){
-    auto val = std::inner_product(begin(a), end(a), begin(b), NT(0)) + 500;
+    auto val = std::inner_product(begin(a), end(a), begin(b), NT(0));
     auto val5 = val*val;
     val5 *= val5;
     val5 *= val;
@@ -378,19 +377,32 @@ int main(int argc, char *argv[]) {
     int train_N = 0.8 * N;
 
     using kernel_type = NT(*)(vector<NT> const &, vector<NT> const &);
-    vector<kernel_type> kernels{&RBFKernel<NT, 2>, &PolynomialKernel5<NT>, &InnerProduct<NT>};
+    vector<kernel_type> kernels{&RBFKernel<NT, 2>, &InnerProduct<NT>};
 
-    auto model = multi_learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
-    //auto model = learn<NT, ET>(0.1, begin(x), end(x), begin(y), *begin(kernels));
+    {
+        auto model = multi_learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
+        //auto model = learn<NT, ET>(0.1, begin(x), end(x), begin(y), *begin(kernels));
 
-    std::cout << "model.alpha.size() = " << model.alpha.size() << std::endl;
-
-    int count = 0;
-    for(int n=train_N; n<N; ++n) {
-        auto predicted = (model(x[n]) ? 1 : -1);
-        if(predicted == y[n]) {
-            ++count;
+        int count = 0;
+        for(int n=train_N; n<N; ++n) {
+            auto predicted = (model(x[n]) ? 1 : -1);
+            if(predicted == y[n]) {
+                ++count;
+            }
         }
+        cout << count << endl;
     }
-    cout << count << endl;
+    {
+        //auto model = multi_learn<NT, ET>(0.1, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
+        auto model = learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), *begin(kernels));
+
+        int count = 0;
+        for(int n=train_N; n<N; ++n) {
+            auto predicted = (model(x[n]) ? 1 : -1);
+            if(predicted == y[n]) {
+                ++count;
+            }
+        }
+        cout << count << endl;
+    }
 }
