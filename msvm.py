@@ -1,7 +1,4 @@
-#!/usr/bin/python3
-
 import sys
-import math
 
 import numpy as np
 
@@ -10,24 +7,6 @@ from cvxopt import matrix, spmatrix
 import cvxopt.solvers
 cvxopt.solvers.options['show_progress'] = False
 from cvxopt.solvers import qp, lp
-
-def read_data(f):
-    xs = []
-    ys = []
-    for line in f:
-        *x_str,y_str = line.split(',')
-        xs.append(np.array(list(map(float,x_str))))
-        ys.append(float(y_str))
-    return (np.array(xs), np.array(ys))
-    
-def gram_matrix(kernel, X):
-    N, d = X.shape
-    gram = np.zeros((N, N))
-    for n, x_n in enumerate(X):
-        for m, x_m in enumerate(X):
-            gram[n,m] = kernel(x_n, x_m)
-    return gram
-
 
 class svm_model:
     def __init__(self, kernel, alpha, bias, support_vectors, support_labels, objective_value):
@@ -43,6 +22,15 @@ class svm_model:
         for n in range(self.alpha.size):
             result += self.alpha[n] * self.support_labels[n] * self.kernel(self.support_vectors[n], x)
         return result > 0
+
+def gram_matrix(kernel, X):
+    N, d = X.shape
+    gram = np.zeros((N, N))
+    for n, x_n in enumerate(X):
+        for m, x_m in enumerate(X):
+            gram[n,m] = kernel(x_n, x_m)
+    return gram
+
 
 def learn(X, y, C, kernel):
     N, d = X.shape
@@ -129,46 +117,9 @@ def multi_learn(X, y, C, kernels):
 
 
         eps = abs(1.0 - S / theta)
-        print("eps: ", eps)
+        print("eps: ", eps, file=sys.stderr)
 
         if  eps < 1e-3:
             break
 
     return model
-
-
-if __name__ == '__main__':
-    with open(sys.argv[1]) as f:
-        X, y = read_data(f)
-
-    N, d = X.shape
-
-    def linear(a, b):
-        return np.dot(a,b)
-    def polynomial(a, b):
-        return np.dot(a,b)**2
-    def rbf(a, b):
-        v = a - b
-        return math.exp( -3 * np.dot(v, v))
-
-    cutoff = int(0.8 * N)
-
-    train_X = X[:cutoff,:]
-    train_y = y[:cutoff]
-
-    test_X = X[cutoff:,:]
-    test_y = y[cutoff:]
-
-    model = multi_learn(train_X, train_y, 1.0, [linear,polynomial,rbf])
-
-    print("#SV: ", model.alpha.size)
-
-    if hasattr(model.kernel, 'beta'):
-        print("beta: ", model.kernel.beta)
-
-    count = 0
-    for x, label in zip(test_X, test_y):
-        real = label > 0
-        if model(x) == real:
-            count += 1
-    print("CA: ", count/(N-cutoff))
