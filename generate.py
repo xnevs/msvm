@@ -12,11 +12,10 @@ m = 1
 
 points = []
 while len(points) < num:
-    p = 4 * (np.random.rand(2) - 0.5)
-    x = np.dot(w,p) + b
-    if x >= m:
+    p = 4 * (np.random.rand(2) - 1)
+    if np.dot(w, p) + b >= m:
         points.append(p.tolist() + [1])
-    elif x <= -m: 
+    elif np.dot(w, p) + b <= -m:
         points.append(p.tolist() + [-1])
 
 for p in points:
