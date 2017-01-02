@@ -47,9 +47,7 @@ class svm_model:
 def learn(X, y, C, kernel):
     N, d = X.shape
 
-    print("start P")
     P = matrix( np.outer(y, y) * gram_matrix(kernel, X) )
-    print("end P")
     q = matrix(-1.0, (N,1))
 
     G = spmatrix(N*[-1.0]+N*[1.0], range(2*N), 2*list(range(N)))
@@ -58,9 +56,7 @@ def learn(X, y, C, kernel):
     A = matrix(y, (1,N))
     b = matrix(0.0)
 
-    print("start qp")
     solution = qp(P, q, G, h, A, b)
-    print("end qp")
     objective_value = solution['primal objective']
     alpha = np.ravel(solution['x'])
 
@@ -122,9 +118,7 @@ def multi_learn(X, y, C, kernels):
         G = matrix(constraints).trans()
         h = matrix(0.0, (G.size[0],1))
 
-        print("start lp")
         solution = lp(c, G, h, A, b)
-        print("end lp")
         solution_x = solution['x']
 
         theta = solution_x[-1]
@@ -137,7 +131,7 @@ def multi_learn(X, y, C, kernels):
         eps = abs(1.0 - S / theta)
         print("eps: ", eps)
 
-        if  eps < 0.001:
+        if  eps < 1e-3:
             break
 
     return model
