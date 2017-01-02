@@ -112,7 +112,7 @@ auto learn(NT C,
         instance_it2 = instance_begin;
         label_it2 = label_begin;
         for(int m=0; m<=n; ++m) {
-            auto val = (*label_it1) * (*label_it2) * kernel(*instance_it1, *instance_it2);  // specify 2d !!, so there is no NT(0.5) factor
+            auto val = (*label_it1) * (*label_it2) * kernel(*instance_it1, *instance_it2);  // specify 2D !!, so there is no NT(0.5) factor
             qp.set_d(n, m, val);
             ++instance_it2;
             ++label_it2;
@@ -123,7 +123,7 @@ auto learn(NT C,
 
     // set c
     for(int n=0; n<N; ++n) {
-        qp.set_c(n, NT(-1.0));
+        qp.set_c(n, NT(-1));
     }
 
     std::cout << "start solve" << std::endl;
@@ -377,11 +377,13 @@ int main(int argc, char *argv[]) {
     int train_N = 0.8 * N;
 
     using kernel_type = NT(*)(vector<NT> const &, vector<NT> const &);
-    vector<kernel_type> kernels{&RBFKernel<NT, 2>, &InnerProduct<NT>};
+    vector<kernel_type> kernels{&InnerProduct<NT>, &RBFKernel<NT,2>};
 
     {
         auto model = multi_learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
         //auto model = learn<NT, ET>(0.1, begin(x), end(x), begin(y), *begin(kernels));
+
+        std::cout << model.objective_value << std::endl;
 
         int count = 0;
         for(int n=train_N; n<N; ++n) {
