@@ -263,7 +263,7 @@ auto multi_learn(NT C,
 
     std::vector<std::vector<NT>> constraints;
 
-    NT eps;
+    double S_d, theta_d;
     do {
         constraints.emplace_back();
         auto & last_constraint = constraints.back();
@@ -282,6 +282,14 @@ auto multi_learn(NT C,
             last_constraint.emplace_back(CGAL::to_double(S_k));
         }
 
+        std::cout << "G:" << std::endl;
+        for(auto constraint : constraints) {
+            for(auto x : constraint) {
+                std::cout << CGAL::to_double(x) << " ";
+            }
+            std::cout << std::endl;
+        }
+
         std::tie(kernel.beta, theta) = optimize<NT, ET>(constraints);
 
         std::cout << "beta: ";
@@ -290,13 +298,15 @@ auto multi_learn(NT C,
         model = learn<NT, ET>(C, instance_begin, instance_end, label_begin, kernel);
         S = model.objective_value;
 
-        if(theta < 0) {
-            S = -S;
-            theta = -theta;
-        }
-        eps = NT(0.9) * theta - S; // convergence criterion  <  0.1
+        S_d = CGAL::to_double(S);
+        theta_d = CGAL::to_double(theta);
 
-    } while(eps > 0);
+        std::cout << "theta: " << theta_d << std::endl;
+        std::cout << "    S: " << S_d << std::endl;
+
+        std::cout << "  eps: " << abs(1 - (S_d/theta_d)) << std::endl;
+
+    } while(abs(1 - (S_d/theta_d)) > 0.01);
     
     return model;
 }
@@ -335,12 +345,9 @@ NT InnerProduct(vector<NT> const & a, vector<NT> const & b){
 }
 
 template<typename NT>
-NT PolynomialKernel5(vector<NT> const & a, vector<NT> const & b){
+NT PolynomialKernel(vector<NT> const & a, vector<NT> const & b){
     auto val = std::inner_product(begin(a), end(a), begin(b), NT(0));
-    auto val5 = val*val;
-    val5 *= val5;
-    val5 *= val;
-    return val5;
+    return val * val * val * val * val;
 }
 
 template<typename NT,
@@ -377,9 +384,9 @@ int main(int argc, char *argv[]) {
     int train_N = 0.8 * N;
 
     using kernel_type = NT(*)(vector<NT> const &, vector<NT> const &);
-    vector<kernel_type> kernels{&InnerProduct<NT>, &RBFKernel<NT,2>};
+    vector<kernel_type> kernels{&PolynomialKernel<NT>, &InnerProduct<NT>, };
 
-    {
+    /*{
         auto model = multi_learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
         //auto model = learn<NT, ET>(0.1, begin(x), end(x), begin(y), *begin(kernels));
 
@@ -393,7 +400,7 @@ int main(int argc, char *argv[]) {
             }
         }
         cout << count << endl;
-    }
+    }*/
     {
         //auto model = multi_learn<NT, ET>(0.1, begin(x), begin(x)+train_N, begin(y), begin(kernels), end(kernels));
         auto model = learn<NT, ET>(100, begin(x), begin(x)+train_N, begin(y), *begin(kernels));
