@@ -35,8 +35,8 @@ if __name__ == '__main__':
     train_X = X[selection,:]
     train_y = y[selection]
 
-    test_X = X[selection,:]
-    test_y = y[selection]
+    test_X = X[np.invert(selection),:]
+    test_y = y[np.invert(selection)]
 
     kernels = [linear] + \
               [rbf(1), rbf(5)] + \
@@ -67,7 +67,6 @@ if __name__ == '__main__':
 
     if hasattr(model.kernel, 'beta'):
         print("beta: ", model.kernel.beta)
-        print(np.sum(model.kernel.beta))
 
     count = 0
     for x, label in zip(test_X, test_y):
