@@ -12,8 +12,8 @@ def polynomial(gamma, c, d):
 
 def rbf(gamma):
     def kernel(u, v):
-        v = u - v
-        return math.exp( -gamma * np.dot(v, v))
+        w = u - v
+        return math.exp( -gamma * np.dot(w, w))
     return kernel
 
 def sigmoid(gamma, c):

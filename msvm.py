@@ -6,16 +6,18 @@ from cvxopt import matrix, spmatrix
 
 import cvxopt.solvers
 cvxopt.solvers.options['show_progress'] = False
-from cvxopt.solvers import qp, lp
 
 class svm_model:
-    def __init__(self, kernel, alpha, bias, support_vectors, support_labels, objective_value):
+    def __init__(self, kernel, alpha, bias, support_vectors, support_labels, objective_value, sv_idx, C):
         self.kernel          = kernel
         self.alpha           = alpha
         self.bias            = bias
         self.support_vectors = support_vectors
         self.support_labels  = support_labels
+
         self.objective_value = objective_value
+        self.sv_idx          = sv_idx
+        self.C               = C
 
     def __call__(self, x):
         result = self.bias
@@ -32,10 +34,13 @@ def gram_matrix(kernel, X):
     return gram
 
 
-def learn(X, y, C, kernel):
+def learn(X, y, C, kernel, gram=None):
+    if gram is None:
+        gram = gram_matrix(kernel, X)
+
     N, d = X.shape
 
-    P = matrix( np.outer(y, y) * gram_matrix(kernel, X) )
+    P = matrix( np.outer(y, y) * gram )
     q = matrix(-1.0, (N,1))
 
     G = spmatrix(N*[-1.0]+N*[1.0], range(2*N), 2*list(range(N)))
@@ -44,7 +49,7 @@ def learn(X, y, C, kernel):
     A = matrix(y, (1,N))
     b = matrix(0.0)
 
-    solution = qp(P, q, G, h, A, b)
+    solution = cvxopt.solvers.qp(P, q, G, h, A, b)
     objective_value = solution['primal objective']
     alpha = np.ravel(solution['x'])
 
@@ -53,6 +58,7 @@ def learn(X, y, C, kernel):
     alpha = alpha[over_threshold]
     support_vectors = X[over_threshold,:]
     support_labels = y[over_threshold]
+    sv_idx = np.arange(N)[over_threshold]
 
     alpha2 = np.array(alpha)
     alpha2[alpha2 > 0.95*C] = 0
@@ -65,7 +71,8 @@ def learn(X, y, C, kernel):
     for n in range(alpha.size):
         bias -= alpha[n] * support_labels[n] * kernel(support_vectors[n],support_vectors[margin_sv_idx])
 
-    return svm_model(kernel, alpha, bias, support_vectors, support_labels, objective_value)
+    return svm_model(kernel, alpha, bias, support_vectors, support_labels, objective_value, sv_idx, C)
+
 
 class Combined_kernel:
     def __init__(self, kernels):
@@ -80,7 +87,9 @@ def multi_learn(X, y, C, kernels):
 
     kernel = Combined_kernel(kernels)
 
-    model = learn(X, y, C, kernel)
+    grams = np.array([gram_matrix(kernel, X) for kernel in kernels])
+
+    model = learn(X, y, C, kernel, gram=np.tensordot(kernel.beta, grams, axes=(0,0)))
 
     c = matrix(0.0, (K+1, 1))
     c[K] = -1.0
@@ -96,8 +105,8 @@ def multi_learn(X, y, C, kernels):
         M = np.outer(model.alpha, model.alpha) * \
             np.outer(model.support_labels, model.support_labels)
         alpha_sum = np.sum(model.alpha)
-        for kernel_k in kernel.kernels:
-            S_k = 0.5 * np.sum(M * gram_matrix(kernel_k, model.support_vectors)) - alpha_sum
+        for k in range(K):
+            S_k = 0.5 * np.sum(M * grams[k, model.sv_idx][:,model.sv_idx]) - alpha_sum
             last_constraint.append(-S_k)
         last_constraint.append(1)
 
@@ -106,19 +115,17 @@ def multi_learn(X, y, C, kernels):
         G = matrix(constraints).trans()
         h = matrix(0.0, (G.size[0],1))
 
-        solution = lp(c, G, h, A, b)
+        solution = cvxopt.solvers.lp(c, G, h, A, b)
         solution_x = solution['x']
 
         theta = solution_x[-1]
         kernel.beta = np.ravel(solution_x[:-1])
 
-        model = learn(X, y, C, kernel)
+        model = learn(X, y, C, kernel, gram=np.tensordot(kernel.beta, grams, axes=(0,0)))
         S = model.objective_value
 
-
         eps = abs(1.0 - S / theta)
-        print("eps: ", eps, file=sys.stderr)
-
+        #print("eps: ", eps, file=sys.stderr)
         if  eps < 1e-3:
             break
 
