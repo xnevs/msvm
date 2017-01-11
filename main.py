@@ -61,8 +61,8 @@ if __name__ == '__main__':
     except Exception as e:
         print("failed:", e)
 
-    print()
-    print()
+    print(file=sys.stderr)
+    print(file=sys.stderr)
 
     print("Cross validation", file=sys.stderr)
     print("================", file=sys.stderr)
@@ -83,8 +83,8 @@ if __name__ == '__main__':
     except Exception as e:
         print("failed:", e)
 
-    print()
-    print()
+    print(file=sys.stderr)
+    print(file=sys.stderr)
 
     print("Multiple kernel learning", file=sys.stderr)
     print("========================", file=sys.stderr)
