@@ -125,7 +125,6 @@ def multi_learn(X, y, C, kernels):
         S = model.objective_value
 
         eps = abs(1.0 - S / theta)
-        #print("eps: ", eps, file=sys.stderr)
         if  eps < 1e-3:
             break
 
