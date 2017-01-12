@@ -55,7 +55,7 @@ if __name__ == '__main__':
     average_kernel = msvm.Combined_kernel(kernels)
 
     # a list of algorithms to cross-validate
-    # the differ only in the parameter C
+    # they differ only in the parameter C
     algs = list(map(lambda C: lambda XX, yy: msvm.learn(XX, yy, C, average_kernel), Cs))
 
     start_time = time.process_time()
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     print("================", file=sys.stderr)
 
     # a list of algorithms to cross-validate
-    # contains all pairse of candidate kernels and Cs
+    # contains all pairs of candidate kernels and Cs
     algs = list(map(lambda kernel_C: lambda XX, yy: msvm.learn(XX, yy, kernel_C[1], kernel_C[0]), kernels_and_Cs ))
 
     start_time = time.process_time()
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     print("========================", file=sys.stderr)
 
     # a list of algorithms to cross-validate
-    # the differ only in the parameter C
+    # they differ only in the parameter C
     algs = list(map(lambda C: lambda XX, yy: msvm.multi_learn(XX, yy, C, kernels), Cs))
 
     start_time = time.process_time()
